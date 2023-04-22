@@ -1,18 +1,12 @@
 import * as React from "react";
-import { Universe } from "rust-libs/rust_libs";
+import { Canvas as WasmCanvas } from "rust-libs/rust_libs";
 import { memory } from "rust-libs/rust_libs_bg.wasm";
 import "./style.css"
-
-const CELL_SIZE = 2; // px
-const GRID_COLOR = "#CCCCCC";
-const DEAD_COLOR = "#FFFFFF";
-const ALIVE_COLOR = "#000000";
-
 
 export const Canvas = () => {
 
     const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
-    const [universe, setUniverse] = React.useState<Universe>();
+    const [universe, setUniverse] = React.useState<WasmCanvas>();
     const width = 20;
     const height = 20;
 
@@ -21,19 +15,27 @@ export const Canvas = () => {
         if (canvas) {
             canvas.width = width;
             canvas.height = height;
-            const universe = Universe.new(width, height);
+            const universe = WasmCanvas.new(width, height);
             setUniverse(universe);
 
             const context = canvas.getContext('2d')
             if (context && universe) {
                 context.imageSmoothingEnabled = false;
-                drawCells(universe, context);
+                draw(universe, context);
             }
         }
     }, [canvasRef.current === null])
 
+    console.log(universe && universe.render())
+
     return (
-        <canvas ref={canvasRef} className="canvas-playground"></canvas>
+        <>
+            <canvas ref={canvasRef} className="canvas-playground"></canvas>
+            <br />
+            <pre>
+                {universe && universe.render()}
+            </pre>
+        </>
     );
 }
 
@@ -41,7 +43,7 @@ const getIndex = (row: number, column: number, width: number) => {
     return row * width + column;
 };
 
-const drawCells = (universe: Universe, ctx: CanvasRenderingContext2D) => {
+const draw = (universe: WasmCanvas, ctx: CanvasRenderingContext2D) => {
     const cellsPtr = universe.pixels();
     const height = universe.height();
     const width = universe.width();
