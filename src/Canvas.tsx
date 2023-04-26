@@ -7,8 +7,8 @@ export const Canvas = () => {
 
     const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
     const [universe, setUniverse] = React.useState<WasmCanvas>();
-    const width = 20;
-    const height = 20;
+    const width = 10;
+    const height = 10;
 
     React.useEffect(() => {
         const canvas = canvasRef.current
@@ -17,6 +17,7 @@ export const Canvas = () => {
             canvas.height = height;
             const universe = WasmCanvas.new(width, height);
             setUniverse(universe);
+            universe.do_stuff();
 
             const context = canvas.getContext('2d')
             if (context && universe) {
