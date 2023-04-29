@@ -1,7 +1,13 @@
 mod utils;
 
-use std::{convert::TryInto, f32::consts::PI, fmt};
+use std::{convert::TryInto, fmt};
 use wasm_bindgen::prelude::*;
+
+use crate::hexagon::{
+    draw_hex, hex_pointy_canvas_tiling, hex_polygon_corners, HexLayout, HexOrientation,
+};
+
+pub mod hexagon;
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
 // allocator.
@@ -42,14 +48,30 @@ impl Canvas {
     }
 
     pub fn do_stuff(&mut self) {
-        self.draw_pixel(Pixel::new(0, 0), [0, 0, 0, 255]);
-        self.draw_pixel(Pixel::new(1, 0), [0, 0, 0, 255]);
-        self.draw_pixel(Pixel::new(2, 6), [0, 0, 0, 255]);
-        self.draw_pixel(Pixel::new(3, 4), [0, 0, 0, 255]);
+        /*self.draw_pixel(&Pixel::new(0, 0), [0, 0, 0, 255]);
+        self.draw_pixel(&Pixel::new(1, 0), [0, 0, 0, 255]);
+        self.draw_pixel(&Pixel::new(2, 6), [0, 0, 0, 255]);
+        self.draw_pixel(&Pixel::new(3, 4), [0, 0, 0, 255]);
         log("First line");
         self.draw_line(&Pixel::new(8, 2), &Pixel::new(1, 9), [255, 255, 0, 255]);
         log("Second line");
-        self.draw_line(&Pixel::new(8, 2), &Pixel::new(7, 9), [255, 0, 255, 255]);
+        self.draw_line(&Pixel::new(8, 2), &Pixel::new(7, 9), [255, 0, 255, 255]);*/
+        let orientation = HexOrientation::new_layout_pointy();
+        let size = Pixel::new(10, 10);
+        let origin = Pixel::new(0, 0);
+        let layout = HexLayout::new(orientation, size, origin);
+        let tiling = hex_pointy_canvas_tiling(self.width, self.height, &layout);
+        for tile in &tiling {
+            draw_hex(self, &layout, &tile, [145, 57, 233, 255]);
+        }
+        for tile in &tiling {
+            let corners = hex_polygon_corners(&layout, &tile);
+            for i in 0..6 {
+                log(format!("Hex {:?}, Vertex {:?}", tile, corners[i]).as_str());
+                let p: Pixel = shift_point_to_vertex(&corners[i]);
+                self.draw_pixel(&p, [255, 0, 0, 255]);
+            }
+        }
     }
 
     pub fn width(&self) -> u32 {
@@ -69,75 +91,41 @@ impl Canvas {
     }
 }
 
-struct Pixel {
-    x: i32,
-    y: i32,
+#[derive(fmt::Debug)]
+pub struct Point<T> {
+    x: T,
+    y: T,
 }
 
-impl Pixel {
-    pub fn new(x: i32, y: i32) -> Pixel {
-        Pixel { x, y }
+impl<T> Point<T> {
+    pub fn new(x: T, y: T) -> Point<T> {
+        Point { x, y }
     }
 }
 
-struct HexLayout {
-    orientation: HexOrientation,
-    size: Pixel,
-    origin: Pixel,
-}
+pub type Pixel = Point<i32>;
 
-fn hex_to_pixel(layout: &HexLayout, h: Hex) -> Pixel {
-    let x: f32 = (layout.orientation.f[0] * (h.q as f32) + layout.orientation.f[1] * h.r as f32)
-        * layout.size.x as f32
-        + layout.origin.x as f32;
-    let y: f32 = (layout.orientation.f[2] * (h.q as f32) + layout.orientation.f[3] * h.r as f32)
-        * layout.size.y as f32
-        + layout.origin.y as f32;
-
-    let x_round: i32 = x.round() as i32;
-    let y_round: i32 = y.round() as i32;
-    Pixel::new(x_round, y_round)
-}
-
-fn pixel_to_hex(layout: &HexLayout, pixel: Pixel) -> Hex {
-    let ptx = (pixel.x as f32 - layout.origin.x as f32) as f32 / layout.size.x as f32;
-    let pty = (pixel.x as f32 - layout.origin.x as f32) as f32 / layout.size.x as f32;
-
-    let q = layout.orientation.b[0] * ptx + layout.orientation.b[1] * pty;
-    let r = layout.orientation.b[2] * ptx + layout.orientation.b[3] * pty;
-
-    let q_round = q.round() as i32;
-    let r_round = r.round() as i32;
-
-    Hex::new_with_axial(q_round, r_round)
-}
-
-fn hex_corner_offset(layout: &HexLayout, corner: u8) -> Pixel {
-    let angle = 3_f32 * PI * (layout.orientation.start_angle + corner as f32) / 6_f32;
-    let x = layout.size.x as f32 * angle.cos();
-    let y = layout.size.y as f32 * angle.sin();
-    let x_round: i32 = x.round() as i32;
-    let y_round: i32 = y.round() as i32;
-    Pixel::new(x_round, y_round)
-}
-
-fn hex_polygon_corners(layout: &HexLayout, h: Hex) -> Vec<Pixel> {
-    let mut corners: Vec<Pixel> = vec![];
-    let center = hex_to_pixel(&layout, h);
-    for i in 0..6 {
-        let offset = hex_corner_offset(&layout, i);
-        corners.push(Pixel::new(center.x + offset.x, center.y + offset.y))
-    }
-    corners
+fn shift_point_to_vertex(point: &Point<f32>) -> Pixel {
+    let x = (point.x + 0.5f32).floor() as i32;
+    let y = (point.y + 0.5f32).floor() as i32;
+    Pixel::new(x, y)
 }
 
 impl Canvas {
-    fn get_index(&self, pixel: Pixel) -> usize {
+    fn get_index(&self, pixel: &Pixel) -> usize {
         4 * (pixel.x * self.width as i32 + pixel.y) as usize
     }
 
-    fn draw_pixel(&mut self, pixel: Pixel, rgba: [u8; 4]) {
-        log(format!("Pixel {}, {}", pixel.x, pixel.y).as_str());
+    fn draw_pixel(&mut self, pixel: &Pixel, rgba: [u8; 4]) {
+        //log(format!("Pixel {}, {}", pixel.x, pixel.y).as_str());
+        if pixel.x < 0
+            || pixel.x >= self.height.try_into().unwrap()
+            || pixel.y < 0
+            || pixel.y >= self.width.try_into().unwrap()
+        {
+            //log("Out of bounds");
+            return;
+        }
         let index = self.get_index(pixel);
         self.pixels[index..index + 4].copy_from_slice(&rgba);
     }
@@ -187,7 +175,7 @@ impl Canvas {
             let row: Result<i32, _> = x.try_into();
             let column: Result<i32, _> = y.try_into();
             if row.is_ok() && column.is_ok() {
-                self.draw_pixel(Pixel::new(row.unwrap(), column.unwrap()), rgba);
+                self.draw_pixel(&Pixel::new(row.unwrap(), column.unwrap()), rgba);
             }
             if D > 0 {
                 y = y + yi;
@@ -215,7 +203,7 @@ impl Canvas {
             let row: Result<i32, _> = x.try_into();
             let column: Result<i32, _> = y.try_into();
             if row.is_ok() && column.is_ok() {
-                self.draw_pixel(Pixel::new(row.unwrap(), column.unwrap()), rgba);
+                self.draw_pixel(&Pixel::new(row.unwrap(), column.unwrap()), rgba);
             }
             if D > 0 {
                 x = x + xi;
@@ -223,52 +211,6 @@ impl Canvas {
             } else {
                 D = D + 2 * dx;
             }
-        }
-    }
-
-    fn draw_hex(&mut self, layout: &HexLayout, h: Hex, rgba: [u8; 4]) {
-        let corners = hex_polygon_corners(layout, h);
-        for i in 0..6 {
-            self.draw_line(&corners[i], &corners[(i + 1) % 6], rgba);
-        }
-    }
-}
-
-struct Hex {
-    q: i32,
-    r: i32,
-    s: i32,
-}
-
-impl Hex {
-    pub fn new(q: i32, r: i32, s: i32) -> Hex {
-        Hex { q, r, s }
-    }
-    pub fn new_with_axial(q: i32, r: i32) -> Hex {
-        Hex { q, r, s: -q - r }
-    }
-}
-
-struct HexOrientation {
-    f: [f32; 4],
-    b: [f32; 4],
-    start_angle: f32,
-}
-
-impl HexOrientation {
-    pub fn new_layout_pointy() -> HexOrientation {
-        HexOrientation {
-            f: [3_f32.sqrt(), 3_f32.sqrt() / 2_f32, 0_f32, 3_f32 / 2_f32],
-            b: [3_f32.sqrt() / 3_f32, -1_f32 / 3_f32, 0_f32, 2_f32 / 3_f32],
-            start_angle: 0.5_f32,
-        }
-    }
-
-    pub fn new_layout_flat() -> HexOrientation {
-        HexOrientation {
-            f: [3_f32 / 2_f32, 0_f32, 3_f32.sqrt() / 2_f32, 3_f32.sqrt()],
-            b: [2_f32 / 3_f32, 0_f32, -1_f32 / 3_f32, 3_f32.sqrt() / 3_f32],
-            start_angle: 0_f32,
         }
     }
 }

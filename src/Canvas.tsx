@@ -7,8 +7,8 @@ export const Canvas = () => {
 
     const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
     const [universe, setUniverse] = React.useState<WasmCanvas>();
-    const width = 10;
-    const height = 10;
+    const width = 40;
+    const height = 100;
 
     React.useEffect(() => {
         const canvas = canvasRef.current
@@ -27,16 +27,24 @@ export const Canvas = () => {
         }
     }, [canvasRef.current === null])
 
-    console.log(universe && universe.render())
 
     return (
         <>
             <canvas ref={canvasRef} className="canvas-playground"></canvas>
             <br />
-            <pre>
-                {universe && universe.render()}
-            </pre>
+            {true && <TextCanvas universe={universe} />}
         </>
+    );
+}
+
+const TextCanvas = (props: { universe: WasmCanvas | undefined }) => {
+    const { universe } = props;
+    console.log(universe && universe.render())
+
+    return (
+        <pre>
+            {universe && universe.render()}
+        </pre>
     );
 }
 
